@@ -1,0 +1,26 @@
+<Bundle xmlns="http://hl7.org/fhir">
+    <entry>
+        <resource>
+            <DiagnosticReport>
+                <id value="TdNEWmCxGjhE-EP9maQpeYSswCvyJXtMrr1wo8k50QUUB"/>
+                <subject>
+                    <reference value="https://w1soap.wakehealth.edu/fhirproxy/api/FHIR/DSTU2/Patient/12345"/>
+                    <display value="Firstname, Lastname"/>
+                </subject>
+                <effectiveDateTime value="2021-12-29T16:42:00Z"/>
+                <category>
+                    <coding>
+                        <display value="Lab Panel"/>
+                    </coding>
+                    <text value="Lab Panel"/>
+                </category>
+                <code>
+                    <text value="CBC WITH AUTO DIFFERENTIAL PANEL"/>
+                </code>
+                <result>
+                    <reference value="https://w1soap.wakehealth.edu/fhirproxy/api/FHIR/DSTU2/Observation/obs1"/>
+                </result>
+            </DiagnosticReport>
+        </resource>
+    </entry>
+</Bundle>

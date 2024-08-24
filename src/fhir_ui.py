@@ -3,147 +3,228 @@ import tkinter as tk
 from tkinter import filedialog
 from tkinter import messagebox
 from tkinter import ttk
+from typing import Any
 from typing import Dict
+from typing import List
 
-from lxml import etree as ET
-
-import fhir_extractor
-import fhir_file_operations
-from fhir_dataclasses import DiagnosticReport
+import fhir_bundle_processor
+from src import observation_processor
 
 
 class FHIRExtractorApp:
     def __init__(self, tk_root: tk.Tk) -> None:
-        self.table = None
-        self.entry_condition = None
+        self.label_patient_name = None
+        self.label_patient_id = None
+        self.text_observations = None
+        self.parse_button = None
+        self.entry_observation_files = None
+        self.observation_files = None
+        self.quit = None
         self.tree = None
-        self.entry_observation = None
-        self.entry_bundle = None
+        self.entry_file = None
         self.root: tk.Tk = tk_root
-        self.bundle_dir: str = ""
-        self.observation_dir: str = ""
-        self.condition_dir: str = ""
-        self.diagnostic_reports: Dict[str, DiagnosticReport] = {}
+        self.root.title("FHIR Resource Extractor")
 
-        # Initialize instance attributes
-        self.entry_bundle: tk.Entry
-        self.entry_observation: tk.Entry
-        self.entry_condition: tk.Entry
-        self.tree: ttk.Treeview
-        self.table: ttk.Treeview
-
+        self.file_path: str = ""
+        self.patient_info: Dict[str, str] = {}
+        self.diagnostic_reports: List[Dict[str, Any]] = []
+        self.sort_column = None
+        self.sort_order = {}
         self.create_widgets()
 
-    @staticmethod
-    def _dir_frame(parent: tk.Widget, label_text: str, browse_command) -> tk.Entry:
-        main_frame: tk.Frame = tk.Frame(parent)
-        main_frame.pack(fill=tk.X, padx=10, pady=5)
-        tk.Label(main_frame, text=label_text).pack(side=tk.LEFT, padx=5)
-        entry = tk.Entry(main_frame)
-        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        tk.Button(main_frame, text="Browse...", command=browse_command).pack(side=tk.LEFT, padx=5)
-        return entry
+    # def create_widgets(self) -> None:
+    #     self.create_file_selection_frame()
+    #     self.create_patient_info_frame()
+    #     self.create_buttons_frame()
+    #     self.create_treeview()
+    #     self.create_text_widget()
+    #     self.create_parse_button()
 
+    # Update to create_widgets method
     def create_widgets(self) -> None:
+        self.create_file_selection_frame()
+        self.create_patient_info_frame()
+        self.create_observation_file_selection_frame()
+        self.create_treeview()
+        self.create_text_widget()
 
-        # Directory selection frames
-        frame: tk.Widget = self.root  # noqa
-        self.entry_bundle = self._dir_frame(frame, "Bundle Directory:", self.browse_bundle_dir)
-        self.entry_observation = self._dir_frame(frame, "Observation Directory:", self.browse_observation_dir)
-        self.entry_condition = self._dir_frame(frame, "Condition Directory:", self.browse_condition_dir)
+    def create_file_selection_frame(self) -> None:
+        frame_file = tk.Frame(self.root)
+        frame_file.pack(fill=tk.X, padx=10, pady=5)
 
-        # Frame for Buttons
+        tk.Label(frame_file, text="Select Diagnostic Report Bundle XML File:").pack(side=tk.LEFT, padx=5)
+        self.entry_file = tk.Entry(frame_file)
+        self.entry_file.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        tk.Button(frame_file, text="Browse...", command=self.browse_file).pack(side=tk.LEFT, padx=5)
+
+    def create_patient_info_frame(self) -> None:
+        frame_patient = tk.Frame(self.root)
+        frame_patient.pack(fill=tk.X, padx=10, pady=5)
+
+        tk.Label(frame_patient, text="Patient Name:").pack(side=tk.LEFT, padx=5)
+        self.label_patient_name = tk.Label(frame_patient, text="")
+        self.label_patient_name.pack(side=tk.LEFT, padx=5)
+
+        tk.Label(frame_patient, text="Patient ID:").pack(side=tk.LEFT, padx=5)
+        self.label_patient_id = tk.Label(frame_patient, text="")
+        self.label_patient_id.pack(side=tk.LEFT, padx=5)
+
+    def create_buttons_frame(self) -> None:
         frame_buttons = tk.Frame(self.root)
         frame_buttons.pack(fill=tk.X, padx=10, pady=5)
 
-        tk.Button(frame_buttons, text="Load Bundle Files", command=self.load_bundle_files).pack(side=tk.LEFT, padx=5)
-        tk.Button(frame_buttons, text="Extract to CSV", command=self.extract_to_csv).pack(side=tk.LEFT, padx=5)
         tk.Button(frame_buttons, text="Quit", command=self.quit).pack(side=tk.LEFT, padx=5)
 
-        # Treeview for displaying bundle files and observations
-        self.tree = ttk.Treeview(self.root, columns='Observations', show='tree')
+    def create_treeview(self) -> None:
+        columns = ("ID", "Category", "Type", "Date", "Observations Count")
+        self.tree = ttk.Treeview(self.root, columns=columns, show="headings", selectmode="browse")
         self.tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        # Table for displaying results
-        self.table = ttk.Treeview(self.root,
-                                  columns=("Patient Name", "Patient ID", "Observation/Condition Name", "Date", "Value"),
-                                  show="headings")
-        self.table.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        for col in columns:
+            self.tree.heading(col, text=col, command=lambda _col=col: self.sort_by_column(_col, False))
+            self.tree.column(col, width=100)
 
-        for col in self.table["columns"]:
-            self.table.heading(col, text=col)
+        self.tree.bind("<Double-1>", self.on_tree_select)
 
-    def browse_bundle_dir(self) -> None:
-        self.bundle_dir = filedialog.askdirectory()
-        self.entry_bundle.delete(0, tk.END)
-        self.entry_bundle.insert(0, self.bundle_dir)
-        print(f"Selected bundle directory: {self.bundle_dir}")
+    def create_text_widget(self) -> None:
+        self.text_observations = tk.Text(self.root, height=10)
+        self.text_observations.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-    def browse_observation_dir(self) -> None:
-        self.observation_dir = filedialog.askdirectory()
-        self.entry_observation.delete(0, tk.END)
-        self.entry_observation.insert(0, self.observation_dir)
-        print(f"Selected observation directory: {self.observation_dir}")
+    def create_parse_button(self) -> None:
+        self.parse_button = tk.Button(self.root, text="Parse Selected Row", command=self.parse_selected_row)
+        self.parse_button.pack(padx=10, pady=5)
 
-    def browse_condition_dir(self) -> None:
-        self.condition_dir = filedialog.askdirectory()
-        self.entry_condition.delete(0, tk.END)
-        self.entry_condition.insert(0, self.condition_dir)
-        print(f"Selected condition directory: {self.condition_dir}")
+    def browse_file(self) -> None:
+        self.file_path = filedialog.askopenfilename(filetypes=[("XML files", "*.xml")])
+        self.entry_file.delete(0, tk.END)
+        self.entry_file.insert(0, self.file_path)
+        self.extract_reports()
 
-    def load_bundle_files(self) -> None:
-        self.tree.delete(*self.tree.get_children())
-
-        if not self.bundle_dir:
-            messagebox.showwarning("Warning", "Please select the Bundle directory.")
+    def extract_reports(self) -> None:
+        if not self.file_path:
+            messagebox.showwarning("Warning", "Please select a file.")
             return
 
-        self.diagnostic_reports = fhir_extractor.extract_diagnostic_reports(self.bundle_dir)
+        try:
+            result = fhir_bundle_processor.extract_diagnostic_report_details(self.file_path)
+            self.patient_info = result['patient_info']
+            self.diagnostic_reports = result['diagnostic_reports']
+            self.display_patient_info()
+            self.display_reports()
+        except ValueError as e:
+            self.text_observations.insert(tk.END, f"Failed to extract diagnostic reports: {e}\n")
+        except Exception as e:
+            self.text_observations.insert(tk.END, f"An unexpected error occurred: {e}\n")
 
-        for report_id, report_data in self.diagnostic_reports.items():
-            patient_name = report_data.patient_name
-            report_item = self.tree.insert("", "end", text=f"Patient: {patient_name}", values=(report_id,))
-            for obs in report_data.observations:
-                self.tree.insert(report_item, "end", text=f"Observation: {obs.name}", values=(obs.date, obs.value))
+    def display_patient_info(self) -> None:
+        self.label_patient_name.config(text=self.patient_info.get('name', 'N/A'))
+        self.label_patient_id.config(text=self.patient_info.get('id', 'N/A'))
 
-    def extract_to_csv(self) -> None:
-        if not self.bundle_dir or not self.observation_dir or not self.condition_dir:
-            messagebox.showwarning("Warning", "Please select all directories.")
-            return
-
-        diagnostic_reports = fhir_extractor.extract_diagnostic_reports(self.bundle_dir)
-        observations = fhir_extractor.extract_resources(self.observation_dir, 'Observation')
-        conditions = fhir_extractor.extract_resources(self.condition_dir, 'Condition')
-        linked_reports = fhir_extractor.link_observations_to_reports(diagnostic_reports, observations)
-
-        # Display the results in the table
-        self.display_results(linked_reports, conditions)
-
-        # Ask where to save the CSV file
-        output_csv = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
-        if output_csv:
-            fhir_file_operations.write_to_csv(linked_reports, output_csv)
-            messagebox.showinfo("Info", f"Data successfully extracted to {output_csv}")
-
-    def display_results(self, linked_reports: Dict[str, DiagnosticReport], conditions: Dict[str, ET.Element]) -> None:
+    def display_reports(self) -> None:
         # Clear previous results
-        for item in self.table.get_children():
-            self.table.delete(item)
+        for item in self.tree.get_children():
+            self.tree.delete(item)
 
-        # Add new results
-        for report_data in linked_reports.values():
-            patient_name = report_data.patient_name
-            patient_id = report_data.patient_id
-            for obs in report_data.observations:
-                self.table.insert("", "end", values=(patient_name, patient_id, obs.name, obs.date, obs.value))
+        for report in self.diagnostic_reports:
+            self.tree.insert("", "end", values=(
+                report['id'],
+                report['category'],
+                report['code'],
+                report['date'],
+                len(report['results'])
+            ))
 
-        for condition in conditions.values():
-            condition_name, condition_date, condition_value = fhir_extractor.extract_resource_details(condition,
-                                                                                                      'Condition')
-            self.table.insert("", "end", values=(condition_name, condition_date, condition_value))
+    def on_tree_select(self, event) -> None:
+        print(event)
+        selected_item = self.tree.selection()[0]
+        report_id = self.tree.item(selected_item, "values")[0]
+        report = next(r for r in self.diagnostic_reports if r['report_id'] == report_id)
+        self.display_observations(report)
 
-    def quit(self) -> None:
-        self.root.quit()
+    def display_observations(self, report: Dict[str, Any]) -> None:
+        self.text_observations.delete(1.0, tk.END)
+        observations = report['results']
+
+        for obs in observations:
+            self.text_observations.insert(tk.END, f"Observation ID: {obs['id']}\n")
+            self.text_observations.insert(tk.END, "\n")
+
+    # def parse_selected_row(self) -> None:
+    #     selected_item = self.tree.selection()
+    #     if not selected_item:
+    #         messagebox.showwarning("Warning", "Please select a row to parse.")
+    #         return
+
+    def parse_selected_row(self) -> None:
+        selected_item = self.tree.selection()
+        if not selected_item:
+            self.text_observations.delete(1.0, tk.END)
+            return
+
+        report_id = self.tree.item(selected_item, "values")[0]
+        report = next(r for r in self.diagnostic_reports if r['id'] == report_id)
+        self.display_observations(report)
+
+    def sort_by_column(self, col: str, descending: bool) -> None:
+        data = [(self.tree.set(child, col), child) for child in self.tree.get_children("")]
+        data.sort(reverse=descending)
+
+        for index, (val, item) in enumerate(data):
+            self.tree.move(item, "", index)
+
+        self.tree.heading(col, command=lambda: self.sort_by_column(col, not descending))
+
+        for col in self.tree["columns"]:
+            self.tree.heading(col, text=col)
+
+        sort_indicator = "▼" if descending else "▲"
+        self.tree.heading(col, text=f"{col} {sort_indicator}")
+
+    # New method to create the observation file selection frame
+    def create_observation_file_selection_frame(self) -> None:
+        frame_observation = tk.Frame(self.root)
+        frame_observation.pack(fill=tk.X, padx=10, pady=5)
+
+        tk.Label(frame_observation, text="Select Observation Files:").pack(side=tk.LEFT, padx=5)
+        self.entry_observation_files = tk.Entry(frame_observation)
+        self.entry_observation_files.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        tk.Button(frame_observation, text="Browse...", command=self.browse_observation_files).pack(side=tk.LEFT, padx=5)
+
+    # New method to handle observation file browsing
+    def browse_observation_files(self) -> None:
+        files = filedialog.askopenfilenames(filetypes=[("XML files", "*.xml")])
+        self.entry_observation_files.delete(0, tk.END)
+        self.entry_observation_files.insert(0, ';'.join(files))
+        self.observation_files = files
+
+    # Update on_tree_click method to call parse_observation_files
+    def on_tree_click(self, event) -> None:
+        item = self.tree.identify('item', event.x, event.y)
+        if item:
+            if item in self.tree.selection():
+                self.tree.selection_remove(item)
+                self.text_observations.delete(1.0, tk.END)
+            else:
+                self.tree.selection_set(item)
+                self.parse_selected_row()
+
+        selected_item = self.tree.selection()
+        report_id = self.tree.item(selected_item, "values")[0]
+        observations = fhir_bundle_processor.get_observations(report_id, self.diagnostic_reports)
+        self.text_observations.delete(1.0, tk.END)
+        for obs in observations:
+            observation_details = observation_processor.parse_observation_files(obs, self.observation_files)
+            self.display_observation_details(observation_details)
+
+    # New method to display observation details
+    def display_observation_details(self, details: List[Dict[str, str]]) -> None:
+        for detail in details:
+            self.text_observations.insert(tk.END, f"ID: {detail['id']}\n")
+            self.text_observations.insert(tk.END, f"Date: {detail['date']}\n")
+            self.text_observations.insert(tk.END, f"Label: {detail['label']}\n")
+            self.text_observations.insert(tk.END, f"Value: {detail['value']}\n")
+            self.text_observations.insert(tk.END, f"Unit: {detail['unit']}\n")
+            self.text_observations.insert(tk.END, "\n")
 
 
 if __name__ == "__main__":

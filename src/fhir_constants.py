@@ -1,6 +1,6 @@
 # fhir_constants.py
-FHIR_NS = 'http://hl7.org/fhir'  # noqa
-NS = {'fhir': FHIR_NS}
+
+NS = {"fhir": "http://hl7.org/fhir"}
 
 # XPath strings as constants
 FHIR_ID = './/fhir:id'

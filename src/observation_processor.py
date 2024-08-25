@@ -100,8 +100,8 @@ def get_subject_details(observation: ET.Element) -> Dict[str, str]:
 def export_to_csv(data: List[Dict[str, Any]], output_file: str) -> None:
     """Export the observation details to a CSV file."""
     columns: list[str] =[
-        'subject_name', 'subject_id',
-        'observation_id', 'category', 'code', 'date', 'value', 'unit',
+        'report_id', 'subject_name', 'subject_id', 'date',
+        'category', 'code','value', 'unit',
         'interpretation', 'value_string',
         'reference_range_low_value', 'reference_range_low_unit',
         'reference_range_high_value', 'reference_range_high_unit'
@@ -113,7 +113,7 @@ def export_to_csv(data: List[Dict[str, Any]], output_file: str) -> None:
             writer.writerow({
                 'subject_name': row['subject'].get('name', 'N/A'),
                 'subject_id': row['subject'].get('id', 'N/A'),
-                'observation_id': row.get('id', 'N/A'),
+                'report_id': row.get('id', 'N/A'),
                 'category': row.get('category', 'N/A'),
                 'code': row.get('code', 'N/A'),
                 'date': row.get('date', 'N/A'),

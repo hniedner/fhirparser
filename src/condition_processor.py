@@ -28,7 +28,7 @@ def parse_conditions_from_bundle_file(file_path: str) -> list[dict[str, Any]]:
 def extract_condition_details(condition: ET.Element) -> dict[str, Any]:
     """Extract details from a Condition resource element."""
     return {
-        'id': get_attribute_value(condition, "fhir:id", 'value'),
+        'condition_id': get_attribute_value(condition, "fhir:id", 'value'),
         'patient_name': get_attribute_value(condition, "fhir:patient/fhir:display", 'value'),
         'patient_id': get_patient_id(condition),
         'asserter_name': get_attribute_value(condition, "fhir:asserter/fhir:display", 'value'),
@@ -85,12 +85,14 @@ def get_category_text(condition: ET.Element) -> str:
 
 def export_conditions_to_csv(conditions: list[dict[str, Any]], output_file: str) -> None:
     """Export the condition details to a CSV file."""
+    columns: list[str] = [
+        'condition_id', 'patient_name', 'patient_id', 'date_recorded',
+        'asserter_name', 'asserter_id',
+        'condition_text', 'condition_code', 'category',
+        'clinical_status', 'verification_status', 'onset_date_time'
+    ]
     with open(output_file, mode='w', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=[
-            'id', 'patient_name', 'patient_id', 'asserter_name', 'asserter_id',
-            'date_recorded', 'condition_text', 'condition_code', 'category',
-            'clinical_status', 'verification_status', 'onset_date_time'
-        ])
+        writer = csv.DictWriter(file, fieldnames=columns)
         writer.writeheader()
         for condition in conditions:
             writer.writerow(condition)

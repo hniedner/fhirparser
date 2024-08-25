@@ -1,12 +1,13 @@
 import os
 import csv
+from plistlib import InvalidFileException
 from typing import List, Dict, Any
 from lxml import etree as ET
 from src.fhir_constants import NS
 from src.utils import get_attribute_value
 
 
-def parse_observation_files(obs_id: str, file_path: str) -> List[Dict[str, Any]]:
+def parse_observation_files(file_path: str) -> List[Dict[str, Any]]:
     result_array = []
     for file in os.listdir(file_path):
         full_path = os.path.join(file_path, file)
@@ -16,9 +17,11 @@ def parse_observation_files(obs_id: str, file_path: str) -> List[Dict[str, Any]]
         try:
             tree = ET.parse(full_path)
             root: ET.Element = tree.getroot()
-
-            observations: List[ET.Element] = root.xpath(f"//fhir:Observation[fhir:id/@value='{obs_id}']", namespaces=NS)
-
+            observations: List[ET.Element] = root.xpath(f"//fhir:Observation", namespaces=NS)
+            if not observations:
+                raise InvalidFileException(
+                    message='This resource does not contain Observations!'
+                )
             for observation in observations:
                 obs_details = extract_observation_details(observation)
                 result_array.append(obs_details)
@@ -96,17 +99,21 @@ def get_subject_details(observation: ET.Element) -> Dict[str, str]:
 
 def export_to_csv(data: List[Dict[str, Any]], output_file: str) -> None:
     """Export the observation details to a CSV file."""
+    columns: list[str] =[
+        'subject_name', 'subject_id',
+        'observation_id', 'category', 'code', 'date', 'value', 'unit',
+        'interpretation', 'value_string',
+        'reference_range_low_value', 'reference_range_low_unit',
+        'reference_range_high_value', 'reference_range_high_unit'
+    ]
     with open(output_file, mode='w', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=[
-            'id', 'category', 'code', 'date', 'value', 'unit', 'interpretation', 'value_string',
-            'reference_range_low_value', 'reference_range_low_unit',
-            'reference_range_high_value', 'reference_range_high_unit',
-            'subject_name', 'subject_id'
-        ])
+        writer = csv.DictWriter(file, fieldnames=columns)
         writer.writeheader()
         for row in data:
             writer.writerow({
-                'id': row.get('id', 'N/A'),
+                'subject_name': row['subject'].get('name', 'N/A'),
+                'subject_id': row['subject'].get('id', 'N/A'),
+                'observation_id': row.get('id', 'N/A'),
                 'category': row.get('category', 'N/A'),
                 'code': row.get('code', 'N/A'),
                 'date': row.get('date', 'N/A'),
@@ -117,16 +124,13 @@ def export_to_csv(data: List[Dict[str, Any]], output_file: str) -> None:
                 'reference_range_low_value': row['reference_range']['low'].get('value', 'N/A'),
                 'reference_range_low_unit': row['reference_range']['low'].get('unit', 'N/A'),
                 'reference_range_high_value': row['reference_range']['high'].get('value', 'N/A'),
-                'reference_range_high_unit': row['reference_range']['high'].get('unit', 'N/A'),
-                'subject_name': row['subject'].get('name', 'N/A'),
-                'subject_id': row['subject'].get('id', 'N/A')
+                'reference_range_high_unit': row['reference_range']['high'].get('unit', 'N/A')
             })
 
 
 if __name__ == '__main__':
-    xml_obs_filepath: str = '../resources/ObservationFiles'
-    # resource_id: str = "T.19P3MMkkDWVZvCr4y.VaruGNtYGygbrg3sxTYeof9AB"
-    # resource_id: str = "1111111_Observations_T0KCwQAws8cd3PhtHJhvG2.j13aza4hjWKCIaLrfkDuYB.xml"
-    resource_id: str = "TgFvBEXpLWXc48bdZ3lJKjJmDqUrDpHXiaFlydvyx.QwB"
-    results = parse_observation_files(file_path=xml_obs_filepath, obs_id=resource_id)
-    print(results)
+    xml_obs_filepath: str = '../resources/Observations'
+    results = parse_observation_files(file_path=xml_obs_filepath)
+    # print(results)
+
+    export_to_csv(results, output_file='observations.csv')

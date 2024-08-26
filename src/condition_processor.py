@@ -1,4 +1,5 @@
 import csv
+import os
 from typing import Any
 from lxml import etree as ET
 
@@ -8,19 +9,24 @@ NS = {"fhir": "http://hl7.org/fhir"}
 def parse_conditions_from_bundle_file(file_path: str) -> list[dict[str, Any]]:
     """Parse the FHIR bundle from an XML file to extract condition details."""
     conditions = []
-    try:
-        tree = ET.parse(file_path)
-        root = tree.getroot()
-        entries = root.findall("fhir:entry", NS)
+    for file in os.listdir(file_path):
+        full_path = os.path.join(file_path, file)
+        if os.path.isdir(full_path) or not file.endswith('.xml'):
+            continue  # Skip directories and non-XML files
 
-        for entry in entries:
-            condition = entry.find("fhir:resource/fhir:Condition", NS)
-            if condition is not None:
-                condition_details = extract_condition_details(condition)
-                conditions.append(condition_details)
+        try:
+            tree = ET.parse(full_path)
+            root = tree.getroot()
+            entries = root.findall("fhir:entry", NS)
 
-    except ET.XMLSyntaxError as e:
-        print(f"Error parsing XML file {file_path}: {e}")
+            for entry in entries:
+                condition = entry.find("fhir:resource/fhir:Condition", NS)
+                if condition is not None:
+                    condition_details = extract_condition_details(condition)
+                    conditions.append(condition_details)
+
+        except ET.XMLSyntaxError as e:
+            print(f"Error parsing XML file {file_path}: {e}")
 
     return conditions
 
@@ -100,10 +106,10 @@ def export_conditions_to_csv(conditions: list[dict[str, Any]], output_file: str)
 
 if __name__ == "__main__":
     # Load the FHIR bundle from an XML file
-    xml_file_path = "../resources/Conditions/1111111_Conditions_Diagnosis.xml"
+    xml_file_path = "../resources/Conditions"
     results = parse_conditions_from_bundle_file(xml_file_path)
 
     # Export the parsed conditions to a CSV file
-    output_csv = 'conditions.csv'
+    output_csv = '../output/conditions.csv'
     export_conditions_to_csv(results, output_csv)
     print(f"Results exported to {output_csv}")

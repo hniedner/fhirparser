@@ -131,6 +131,5 @@ def export_to_csv(data: List[Dict[str, Any]], output_file: str) -> None:
 if __name__ == '__main__':
     xml_obs_filepath: str = '../resources/Observations'
     results = parse_observation_files(file_path=xml_obs_filepath)
-    # print(results)
 
-    export_to_csv(results, output_file='observations.csv')
+    export_to_csv(results, output_file='../output/observations.csv')

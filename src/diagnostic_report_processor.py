@@ -1,4 +1,5 @@
 import csv
+import os
 from typing import Any
 
 from lxml import etree as ET
@@ -9,19 +10,24 @@ NS = {"fhir": "http://hl7.org/fhir"}
 def parse_diagnostic_reports_from_bundle_file(file_path: str) -> list[dict[str, Any]]:
     """Parse the FHIR bundle from an XML file to extract diagnostic report details."""
     reports = []
-    try:
-        tree = ET.parse(file_path)
-        root = tree.getroot()
-        entries = root.findall("fhir:entry", NS)
+    for file in os.listdir(file_path):
+        full_path = os.path.join(file_path, file)
+        if os.path.isdir(full_path) or not file.endswith('.xml'):
+            continue  # Skip directories and non-XML files
 
-        for entry in entries:
-            diagnostic_report = entry.find("fhir:resource/fhir:DiagnosticReport", NS)
-            if diagnostic_report is not None:
-                report_details = extract_diagnostic_report_details(diagnostic_report)
-                reports.append(report_details)
+        try:
+            tree = ET.parse(full_path)
+            root = tree.getroot()
+            entries = root.findall("fhir:entry", NS)
 
-    except ET.XMLSyntaxError as e:
-        print(f"Error parsing XML file {file_path}: {e}")
+            for entry in entries:
+                diagnostic_report = entry.find("fhir:resource/fhir:DiagnosticReport", NS)
+                if diagnostic_report is not None:
+                    report_details = extract_diagnostic_report_details(diagnostic_report)
+                    reports.append(report_details)
+
+        except ET.XMLSyntaxError as e:
+            print(f"Error parsing XML file {file_path}: {e}")
 
     return reports
 
@@ -109,10 +115,10 @@ def export_diagnostic_reports_to_csv(reports: list[dict[str, Any]], output_file:
 
 if __name__ == "__main__":
     # Load the FHIR bundle from an XML file
-    xml_file_path = "../resources/BundleDiagnosticReports/1111111DiagnosticReport.xml"
+    xml_file_path = "../resources/BundleDiagnosticReports"
     diagnostic_reports = parse_diagnostic_reports_from_bundle_file(xml_file_path)
 
     # Export the parsed diagnostic reports to a CSV file
-    output_csv = 'diagnostic_reports.csv'
+    output_csv = '../output/diagnostic_reports.csv'
     export_diagnostic_reports_to_csv(diagnostic_reports, output_csv)
     print(f"Results exported to {output_csv}")
